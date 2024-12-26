@@ -1,6 +1,6 @@
-# 📹 Welcome To My-Tube
+# 📹 Welcome To Sky-Tube
 
-MyTube is a modern web-based platform that enables content creators to share their content through various media formats, including videos and tweets effortlessly. It's built using the MERN stack and integrates Cloudinary for seamless image and video storage.MyTube ensures a smooth user experience across devices.
+SkyTube is a modern web-based platform that enables content creators to share their content through various media formats, including videos and tweets effortlessly. It's built using the MongoDB Go Reactjs stack and integrates Cloudinary for seamless image and video storage.MyTube ensures a smooth user experience across devices.
 
 ## 🧊 Technologies
 
