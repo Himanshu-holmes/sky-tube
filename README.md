@@ -1,12 +1,11 @@
-# 📹 Welcome To My-Tube
+# 📹 Welcome To Sky-Tube
 
-MyTube is a modern web-based platform that enables content creators to share their content through various media formats, including videos and tweets effortlessly. It's built using the MERN stack and integrates Cloudinary for seamless image and video storage.MyTube ensures a smooth user experience across devices.
+SkyTube is a modern web-based platform that enables content creators to share their content through various media formats, including videos and tweets effortlessly. It's built using the MongoDB Go Reactjs stack and integrates Cloudinary for seamless image and video storage.SkyTube ensures a smooth user experience across devices.
 
 ## 🧊 Technologies
 
 - `Javascript`
-- `Node.js`
-- `Express.js`
+- `Go For Backend`
 - `MongoDb For Database`
 - `Cloudinary For Storage of Media Files`
 - `React.js`
@@ -15,7 +14,7 @@ MyTube is a modern web-based platform that enables content creators to share the
 
 ## 🚀 Features
 
-Here's what you can do with MyTube.
+Here's what you can do with SkyTube.
 
 - **Account Creation**: Users can easily sign up for a free account, creating their channel automatically.
 
@@ -55,7 +54,7 @@ After posting a tweet or comment, the data fetched from the backend is not displ
 
 #### Steps to Reproduce
 
-1. Log in to the MyTube platform.
+1. Log in to the SkyTube platform.
 2. Navigate to the tweet or comment section.
 3. Post a new tweet or comment.
 4. Observe the displayed data for the posted tweet or comment.
