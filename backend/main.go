@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -16,7 +18,12 @@ var collection *mongo.Collection
 var ctx = context.TODO()
 
 func init() {
-	clientOptions := options.Client().ApplyURI("mongodb+srv://avishekgop5833:DpGMy48fa1C4Xs2z@cluster0.ye78ch9.mongodb.net/")
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("Error loading .env file: %s", err)
+	}
+	MONGO_URL := os.Getenv("MONGO_URL")
+	clientOptions := options.Client().ApplyURI(MONGO_URL)
 	client, err := mongo.Connect(ctx, clientOptions)
 	
 	if err != nil {
