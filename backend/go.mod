@@ -13,6 +13,7 @@ require (
 require (
 	github.com/creasty/defaults v1.7.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.0 // indirect
+	github.com/go-chi/cors v1.2.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/schema v1.4.1 // indirect

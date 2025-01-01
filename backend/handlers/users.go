@@ -1,47 +1,143 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"log"
+	"mime/multipart"
+
+	"os"
+	"time"
 
 	"net/http"
 
+	"github.com/Himanshu-holmes/sky-tube/config"
+	models "github.com/Himanshu-holmes/sky-tube/model"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+
+	"go.mongodb.org/mongo-driver/mongo/options"
+
+	// models "github.com/Himanshu-holmes/sky-tube/model"
 	"github.com/Himanshu-holmes/sky-tube/utils"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
+	"github.com/google/uuid"
 )
 
 func RegisterUsers(w http.ResponseWriter, r *http.Request) {
 
 	type parameters struct {
-		Fullname string `json:"fullName"`
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Fullname   string `json:"fullName"`
+		Username   string `json:"username"`
+		Email      string `json:"email"`
+		Password   string `json:"password"`
+		Avatar     string `json:"avatar"`
+		CoverImage string `json:"coverImage"`
 	}
 
-	// parsed form data
-	err := r.ParseForm()
+	fullname := r.FormValue("fullName")
+	username := r.FormValue("username")
+	email := r.FormValue("email")
+	password := r.FormValue("password")
+	avatarFile, avatarHeaders, err := r.FormFile("avatar")
 	if err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("Error parsing form data: %v", err))
+		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+	}
+	coverImageFile, coverImageHeaders, err := r.FormFile("coverImage")
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+	}
+
+	defer avatarFile.Close()
+
+	defer r.Body.Close()
+	// save avatar in local
+	aImgUrl, err := uploadImage(avatarFile, avatarHeaders)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+	}
+	// save coverImage in local
+	cImgUrl, err := uploadImage(coverImageFile, coverImageHeaders)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+	}
+
+	fmt.Println("cImgUrl", cImgUrl)
+	var result models.User
+
+	collection := config.GetCollection("users")
+	fmt.Println("collection", collection)
+	filter := bson.D{{"email", email}}
+	project := bson.D{{"email", 1}}
+	opts := options.FindOne().SetProjection(project)
+	err = collection.FindOne(context.Background(), filter, opts).Decode(&result)
+	fmt.Println("error", err)
+	fmt.Println("mongo no doc err", mongo.ErrNoDocuments)
+	fmt.Println("err = mongo.ErrNoDocuments", err == mongo.ErrNoDocuments)
+	if err == nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("User already exists with email %v", email))
+		return
+	}
+	fmt.Println("result", result)
+	if result.Email == email {
+		utils.RespondWithError(w, 400, fmt.Sprintf("user with email %v already exists", email))
+		return
+	}
+	user := models.User{
+		FullName:   fullname,
+		Username:   username,
+		Email:      email,
+		Password:   password,
+		Avatar:     aImgUrl,
+		CoverImage: cImgUrl,
+	}
+	newUser, err := user.Save(context.Background(), collection)
+	println("newUser", newUser.InsertedID)
+
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("error in inserting user %v", err.Error()))
 		return
 	}
 
-	fullname := r.PostForm.Get("fullName")
-	username := r.PostForm.Get("username")
-	email := r.PostForm.Get("email")
-	password := r.PostForm.Get("password")
-	avatar := r.PostForm.Get("avatar")
-
-	fmt.Println("Fullname:", fullname)
-	fmt.Println("Username", username)
-	fmt.Println("email", email)
-	fmt.Println("Password", password)
-	fmt.Println("Avatar", avatar)
-
-	defer r.Body.Close()
-
 	utils.RespondWithJson(w, 200, 200, parameters{
-		Fullname: fullname,
-		Username: username,
-		Email:    email,
-		Password: password,
+		Fullname:   fullname,
+		Username:   username,
+		Email:      email,
+		Password:   password,
+		Avatar:     aImgUrl,
+		CoverImage: cImgUrl,
 	}, "User registered successfully")
+
+}
+
+func uploadImage(file multipart.File, handler *multipart.FileHeader) (string, error) {
+	if _, err := os.Stat("uploads"); os.IsNotExist(err) {
+		if mkDirErr := os.Mkdir("uploads", os.ModePerm); mkDirErr != nil {
+
+			return "", mkDirErr
+		}
+	}
+	uniqueFileName := fmt.Sprintf("%d_%s", time.Now().UnixNano(), handler.Filename)
+
+	dst, _ := os.Create("uploads/" + uniqueFileName)
+	defer dst.Close()
+	_, err := io.Copy(dst, file)
+	if err != nil {
+
+		return "", err
+	}
+	var ctx = context.Background()
+	cld, err := config.SetupCloudinary()
+	if err != nil {
+		return "", err
+	}
+	newUUID := uuid.New().String()
+	resp, err := cld.Upload.Upload(ctx, "uploads/"+uniqueFileName, uploader.UploadParams{PublicID: "sky-tube/avataar" + newUUID})
+	if err != nil {
+		log.Println("error in uploading to cloudinary", err)
+		return "", err
+	}
+
+	return resp.SecureURL, nil
 }
