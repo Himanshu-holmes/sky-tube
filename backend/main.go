@@ -63,7 +63,8 @@ func main() {
 	})
 
 	r.Route("/api/v1/users", func(r chi.Router) {
-		r.Post("/register",handlers.RegisterUsers)
+		r.Post("/register",handlers.RegisterUser)
+		r.Post("/login",handlers.LoginUser)
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)

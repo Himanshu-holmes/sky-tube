@@ -15,17 +15,17 @@ import (
 )
 
 type User struct {
-	ID           primitive.ObjectID   `bson:"_id,omitempty"`
+	ID           primitive.ObjectID   `bson:"_id"`
 	Username     string               `bson:"username" validate:"required,unique"`
 	Email        string               `bson:"email" validate:"required,email,unique"`
 	FullName     string               `bson:"fullName" validate:"required"`
 	Avatar       string               `bson:"avatar" validate:"required"`
-	CoverImage   string               `bson:"coverImage,omitempty"`
-	WatchHistory []primitive.ObjectID `bson:"watchHistory,omitempty"`
+	CoverImage   string               `bson:"coverImage"`
+	WatchHistory []primitive.ObjectID `bson:"watchHistory"`
 	Password     string               `bson:"password" validate:"required"`
-	RefreshToken string               `bson:"refreshToken,omitempty"`
-	CreatedAt    time.Time            `bson:"createdAt,omitempty"`
-	UpdatedAt    time.Time            `bson:"updatedAt,omitempty"`
+	RefreshToken string               `bson:"refreshToken"`
+	CreatedAt    time.Time            `bson:"createdAt"`
+	UpdatedAt    time.Time            `bson:"updatedAt"`
 }
 
 // HashPassword hashes the user's password before saving it.

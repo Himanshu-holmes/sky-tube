@@ -26,7 +26,8 @@ export const userSingup = async (data) => {
 export const userLogin = async (data) => {
   try {
     const resposne = await axiosInstance.post("/users/login", data);
-    return resposne.data.data.user;
+    console.log("response",resposne.data)
+    return resposne.data.user;
   } catch (error) {
     // toast.error("Something Went Wrong Please Try Again");
     toast.error(error?.response.data.message);
