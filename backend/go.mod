@@ -4,7 +4,10 @@ go 1.23.4
 
 require (
 	github.com/cloudinary/cloudinary-go/v2 v2.9.0
+	github.com/go-chi/chi/v5 v5.2.0
+	github.com/go-chi/cors v1.2.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	go.mongodb.org/mongo-driver v1.17.1
 	golang.org/x/crypto v0.26.0
@@ -12,10 +15,7 @@ require (
 
 require (
 	github.com/creasty/defaults v1.7.0 // indirect
-	github.com/go-chi/chi/v5 v5.2.0 // indirect
-	github.com/go-chi/cors v1.2.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect

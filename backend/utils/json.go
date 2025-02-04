@@ -21,7 +21,9 @@ func ApiResponse(statusCode int, data interface{},message string)ApiResponseType
 	}
 }
 func RespondWithJson(w http.ResponseWriter, code int,statusCode int, data interface{},message string) {
-	jsonData,err := json.Marshal(data)
+	jsonData,err := json.Marshal(ApiResponse(statusCode,data,message))
+
+	fmt.Println("jsonData",jsonData)
 	if err != nil {
 		fmt.Println("error",err)
 	

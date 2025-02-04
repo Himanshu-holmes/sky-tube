@@ -1,14 +1,10 @@
 package handlers
 
 import (
-	"context"
+	
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"mime/multipart"
-
-	"os"
+	
 	"time"
 
 	"net/http"
@@ -24,70 +20,73 @@ import (
 
 	// models "github.com/Himanshu-holmes/sky-tube/model"
 	"github.com/Himanshu-holmes/sky-tube/utils"
-	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
-	"github.com/google/uuid"
 )
 
+/**
+ * Register a new user.
+ *
+ * POST /api/v1/users/register
+ */
 func RegisterUser(w http.ResponseWriter, r *http.Request) {
-
-	type parameters struct {
-		Fullname   string `json:"fullName"`
-		Username   string `json:"username"`
-		Email      string `json:"email"`
-		Password   string `json:"password"`
-		Avatar     string `json:"avatar"`
-		CoverImage string `json:"coverImage"`
-	}
-
 	fullname := r.FormValue("fullName")
 	username := r.FormValue("username")
 	email := r.FormValue("email")
 	password := r.FormValue("password")
+
 	avatarFile, avatarHeaders, err := r.FormFile("avatar")
 	if err != nil {
-		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading avatar image: %v", err))
+		return
 	}
+	defer avatarFile.Close()
+
 	coverImageFile, coverImageHeaders, err := r.FormFile("coverImage")
 	if err != nil {
-		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading cover image: %v", err))
+		return
 	}
-
-	defer avatarFile.Close()
 	defer coverImageFile.Close()
-	defer r.Body.Close()
-	// save avatar in local
-	aImgUrl, err := uploadImage(avatarFile, avatarHeaders)
+
+	// Upload images
+	aImgUrl, err := utils.UploadImage(avatarFile, avatarHeaders)
 	if err != nil {
-		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
-	}
-	// save coverImage in local
-	cImgUrl, err := uploadImage(coverImageFile, coverImageHeaders)
-	if err != nil {
-		utils.RespondWithError(w, 400, fmt.Sprintf("error in uploading image %v", err))
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading avatar image: %v", err))
+		return
 	}
 
-	fmt.Println("cImgUrl", cImgUrl)
+	cImgUrl, err := utils.UploadImage(coverImageFile, coverImageHeaders)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading cover image: %v", err))
+		return
+	}
+
+	
+
+	// Check if user exists
 	var result models.User
+	filter := bson.M{"email": email}
+	project := bson.M{"email": 1}
+	collection,err := models.GetUser(r.Context(), filter, project, &result)
+	fmt.Printf("\nexistingUser: %+v\n", collection)
+	fmt.Printf(("\n result: %+v\n"), result)
 
-	collection := config.GetCollection("users")
-	fmt.Println("collection", collection)
-	filter := bson.D{{"email", email}}
-	project := bson.D{{"email", 1}}
-	opts := options.FindOne().SetProjection(project)
-	err = collection.FindOne(context.Background(), filter, opts).Decode(&result)
-	fmt.Println("error", err)
-	fmt.Println("mongo no doc err", mongo.ErrNoDocuments)
-	fmt.Println("err = mongo.ErrNoDocuments", err == mongo.ErrNoDocuments)
-	if err == nil {
+	if result.Email == email {
+		utils.RespondWithError(w,400, fmt.Sprintf("User already exists with email %v", email))
+		return
+	}
+
+
+	if err != nil && err != mongo.ErrNoDocuments {
+		utils.RespondWithError(w, 500, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+
+	if result.Email == email {
 		utils.RespondWithError(w, 400, fmt.Sprintf("User already exists with email %v", email))
 		return
 	}
-	fmt.Println("result", result)
-	if result.Email == email {
-		utils.RespondWithError(w, 400, fmt.Sprintf("user with email %v already exists", email))
-		return
-	}
-	
+
+	// Create user
 	user := models.User{
 		FullName:   fullname,
 		Username:   username,
@@ -96,67 +95,42 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		Avatar:     aImgUrl,
 		CoverImage: cImgUrl,
 	}
-	err =user.HashPassword()
+	err = user.HashPassword()
 	if err != nil {
-		utils.RespondWithError(w, 400, fmt.Sprintf("error in hashing password %v", err))
-		return
-	}
-	newUser, err := user.Save(context.Background(), collection)
-	println("newUser", newUser.InsertedID)
-
-	if err != nil {
-		utils.RespondWithError(w, 400, fmt.Sprintf("error in inserting user %v", err.Error()))
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in hashing password %v", err))
 		return
 	}
 
-	utils.RespondWithJson(w, 200, 200, parameters{
-		Fullname:   fullname,
-		Username:   username,
-		Email:      email,
-		Password:   password,
-		Avatar:     aImgUrl,
-		CoverImage: cImgUrl,
+	newUser, err := user.Save(r.Context(), collection)
+	fmt.Printf("\nnewUser: %+v\n", newUser)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in inserting user %v", err.Error()))
+		return
+	}
+
+	utils.RespondWithJson(w, 200, 200, map[string]interface{}{
+		"fullName":   fullname,
+		"username":   username,
+		"email":      email,
+		"avatar":     aImgUrl,
+		"coverImage": cImgUrl,
 	}, "User registered successfully")
-
 }
 
-func uploadImage(file multipart.File, handler *multipart.FileHeader) (string, error) {
-	if _, err := os.Stat("uploads"); os.IsNotExist(err) {
-		if mkDirErr := os.Mkdir("uploads", os.ModePerm); mkDirErr != nil {
-
-			return "", mkDirErr
-		}
-	}
-	uniqueFileName := fmt.Sprintf("%d_%s", time.Now().UnixNano(), handler.Filename)
-
-	dst, _ := os.Create("uploads/" + uniqueFileName)
-	defer dst.Close()
-	_, err := io.Copy(dst, file)
-	if err != nil {
-		return "", err
-	}
-	var ctx = context.Background()
-	cld, err := config.SetupCloudinary()
-	if err != nil {
-		return "", err
-	}
-	newUUID := uuid.New().String()
-	resp, err := cld.Upload.Upload(ctx, "uploads/"+uniqueFileName, uploader.UploadParams{PublicID: "sky-tube/avataar" + newUUID})
-	if err != nil {
-		log.Println("error in uploading to cloudinary", err)
-		return "", err
-	}
-
-	return resp.SecureURL, nil
-}
+/**
+ * Log in a user.
+ *
+ * POST /api/users/login
+ */
 func LoginUser(w http.ResponseWriter, r *http.Request) {
+
 	defer r.Body.Close()
 	type LoginRequest struct {
 		Email    string `json:"email"`
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-		type UserResponse struct {
+	type UserResponse struct {
 		ID           primitive.ObjectID   `json:"id"`
 		Username     string               `json:"username"`
 		Email        string               `json:"email"`
@@ -167,13 +141,12 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt    time.Time            `json:"createdAt,omitempty"`
 		UpdatedAt    time.Time            `json:"updatedAt,omitempty"`
 	}
-	
+
 	type LoginResponse struct {
-		User        UserResponse      `json:"user"`
-		AccessToken  string      `json:"accessToken"`
-		RefreshToken string      `json:"refreshToken"`
+		User         UserResponse `json:"user"`
+		AccessToken  string       `json:"accessToken"`
+		RefreshToken string       `json:"refreshToken"`
 	}
-	
 
 	var result LoginRequest
 	var user models.User
@@ -181,11 +154,11 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, 400, fmt.Sprintf("something wrong : %v", err))
 	}
 	collection := config.GetCollection("users")
-	filter := bson.D{{"email", result.Email}}
-	project := bson.D{{"email", 1}, {"username", 1},{"fullName", 1}, {"avatar", 1}, {"coverImage", 1}, {"watchHistory", 1}, {"createdAt", 1}, {"updatedAt", 1}}
+	filter := bson.M{"email": result.Email}
+	project := bson.M{"email": 1, "username": 1, "fullName": 1,"password":1, "avatar": 1, "coverImage": 1, "watchHistory": 1, "createdAt": 1, "updatedAt": 1}
 	opts := options.FindOne().SetProjection(project)
 	err := collection.FindOne(r.Context(), filter, opts).Decode(&user)
-	
+
 	if err != nil {
 		utils.RespondWithError(w, 400, fmt.Sprintf("error in finding user %v", err))
 		return
@@ -195,8 +168,8 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Println("user", user)
-	if err := user.IsPasswordCorrect(result.Password); err != false {
-		utils.RespondWithError(w, 400, fmt.Sprintf("password is incorrect %v", err))
+	if err:= user.IsPasswordCorrect(result.Password); err!=nil  {
+		utils.RespondWithError(w, 400, "password is incorrect ")
 		return
 	}
 	accessToken, err := user.GenerateAccessToken()
@@ -204,19 +177,29 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, 400, fmt.Sprintf("error in generating access token %v", err))
 		return
 	}
+
 	refreshToken, err := user.GenerateRefreshToken()
 	if err != nil {
 		utils.RespondWithError(w, 400, fmt.Sprintf("error in generating refresh token %v", err))
 		return
 	}
-	
+	// save refresh token in db
+	user.AccessToken = accessToken
+	user.RefreshToken = refreshToken
+	tokenUpdate, err := user.SaveRefreshTokenAndAccessToken(r.Context(), collection)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("error in updating token %v", err))
+		return
+	}
+	fmt.Println("tokenUpdate Result", tokenUpdate)
+
 	userResponse := UserResponse{
 		ID:           user.ID,
 		Username:     user.Username,
 		Email:        user.Email,
 		FullName:     user.FullName,
 		Avatar:       user.Avatar,
-		CoverImage:   user.CoverImage,	
+		CoverImage:   user.CoverImage,
 		WatchHistory: user.WatchHistory,
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
@@ -239,5 +222,69 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	utils.RespondWithJson(w, 200, 200, loginResponse, "User logged in successfully")
+}
+
+func LogOutUser(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:    "accessToken",
+		Value:   "",
+		Expires: time.Now().Add(-time.Hour),
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refreshToken",
+		Value:   "",
+		Expires: time.Now().Add(-time.Hour),
+	})
+
+	utils.RespondWithJson(w, 200, 200, nil, "User logged out successfully")
+}
+
+func GetUserHandler(w http.ResponseWriter, r *http.Request){
+	// get userId from context
+	userId,ok := r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	objId,err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	collection := config.GetCollection("users")
+	filter := bson.M{"_id":objId}
+	var user models.User
+	if err := collection.FindOne(r.Context(),filter).Decode(&user); err!= nil {
+		if err ==  mongo.ErrNoDocuments {
+			utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		}else{
+			utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		}
+		return
+	}
+	// json structure of user
+	type userResponse struct {
+		ID           primitive.ObjectID   `json:"id"`
+		Username     string               `json:"username"`
+		Email        string               `json:"email"`
+		FullName     string               `json:"fullName"`
+		Avatar       string               `json:"avatar"`
+		CoverImage   string               `json:"coverImage,omitempty"`
+		WatchHistory []primitive.ObjectID `json:"watchHistory,omitempty"`
+		CreatedAt    time.Time            `json:"createdAt,omitempty"`
+		UpdatedAt    time.Time            `json:"updatedAt,omitempty"`
+	}
+	userResponseJson := userResponse{
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		FullName:     user.FullName,
+		Avatar:       user.Avatar,
+		CoverImage:   user.CoverImage,
+		WatchHistory: user.WatchHistory,
+		CreatedAt:    user.CreatedAt,
+		UpdatedAt:    user.UpdatedAt,
+	}
+	utils.RespondWithJson(w, http.StatusOK, 200,userResponseJson , "user found successfully")
 
 }

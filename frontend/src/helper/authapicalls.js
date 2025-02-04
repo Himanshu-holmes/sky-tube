@@ -27,7 +27,7 @@ export const userLogin = async (data) => {
   try {
     const resposne = await axiosInstance.post("/users/login", data);
     console.log("response",resposne.data)
-    return resposne.data.user;
+    return resposne.data.data.user;
   } catch (error) {
     // toast.error("Something Went Wrong Please Try Again");
     toast.error(error?.response.data.message);
