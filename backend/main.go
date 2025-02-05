@@ -65,6 +65,7 @@ func main() {
 		})).(http.HandlerFunc))
 
 		r.With(VerifyToken).Get("/getCurrentUser",handlers.GetUserHandler)
+		r.Post("/refresh-Token",handlers.GetRefreshToken)
 		r.Post("/logout",handlers.LogOutUser)
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

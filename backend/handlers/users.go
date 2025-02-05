@@ -1,16 +1,17 @@
 package handlers
 
 import (
-	
 	"encoding/json"
 	"fmt"
-	
+	"os"
+
 	"time"
 
 	"net/http"
 
 	"github.com/Himanshu-holmes/sky-tube/config"
 	models "github.com/Himanshu-holmes/sky-tube/model"
+	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
@@ -60,21 +61,18 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
-
 	// Check if user exists
 	var result models.User
 	filter := bson.M{"email": email}
 	project := bson.M{"email": 1}
-	collection,err := models.GetUser(r.Context(), filter, project, &result)
+	collection, err := models.GetUser(r.Context(), filter, project, &result)
 	fmt.Printf("\nexistingUser: %+v\n", collection)
 	fmt.Printf(("\n result: %+v\n"), result)
 
 	if result.Email == email {
-		utils.RespondWithError(w,400, fmt.Sprintf("User already exists with email %v", email))
+		utils.RespondWithError(w, 400, fmt.Sprintf("User already exists with email %v", email))
 		return
 	}
-
 
 	if err != nil && err != mongo.ErrNoDocuments {
 		utils.RespondWithError(w, 500, fmt.Sprintf("Database error: %v", err))
@@ -155,7 +153,7 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 	collection := config.GetCollection("users")
 	filter := bson.M{"email": result.Email}
-	project := bson.M{"email": 1, "username": 1, "fullName": 1,"password":1, "avatar": 1, "coverImage": 1, "watchHistory": 1, "createdAt": 1, "updatedAt": 1}
+	project := bson.M{"email": 1, "username": 1, "fullName": 1, "password": 1, "avatar": 1, "coverImage": 1, "watchHistory": 1, "createdAt": 1, "updatedAt": 1}
 	opts := options.FindOne().SetProjection(project)
 	err := collection.FindOne(r.Context(), filter, opts).Decode(&user)
 
@@ -168,7 +166,7 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Println("user", user)
-	if err:= user.IsPasswordCorrect(result.Password); err!=nil  {
+	if err := user.IsPasswordCorrect(result.Password); err != nil {
 		utils.RespondWithError(w, 400, "password is incorrect ")
 		return
 	}
@@ -239,25 +237,25 @@ func LogOutUser(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJson(w, 200, 200, nil, "User logged out successfully")
 }
 
-func GetUserHandler(w http.ResponseWriter, r *http.Request){
+func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// get userId from context
-	userId,ok := r.Context().Value("userId").(string)
+	userId, ok := r.Context().Value("userId").(string)
 	if !ok {
 		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
 		return
 	}
-	objId,err := primitive.ObjectIDFromHex(userId)
+	objId, err := primitive.ObjectIDFromHex(userId)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
 		return
 	}
 	collection := config.GetCollection("users")
-	filter := bson.M{"_id":objId}
+	filter := bson.M{"_id": objId}
 	var user models.User
-	if err := collection.FindOne(r.Context(),filter).Decode(&user); err!= nil {
-		if err ==  mongo.ErrNoDocuments {
+	if err := collection.FindOne(r.Context(), filter).Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
 			utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
-		}else{
+		} else {
 			utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		}
 		return
@@ -285,6 +283,121 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request){
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
 	}
-	utils.RespondWithJson(w, http.StatusOK, 200,userResponseJson , "user found successfully")
+	utils.RespondWithJson(w, http.StatusOK, 200, userResponseJson, "user found successfully")
+
+}
+
+func GetRefreshToken(w http.ResponseWriter, r *http.Request) {
+	/*
+		Step 1: Get the refresh token from the cookie, request body, or headers
+		Step 2: Verify the incoming refresh token against the secret
+		Step 3: Get the userId from the verified refresh token
+		Step 4: Find the user in the database using the userId
+		Step 5: Ensure the incoming refresh token matches the stored refresh token
+		Step 6: Generate new access and refresh tokens
+		Step 7: Set the new tokens in cookies and send the response
+	*/
+	// get refresh token from cookie
+	incomingRefreshToken := getRefreshTokenFromRequestBdy(r)
+	if incomingRefreshToken == "" {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	// verify the incoming refresh token
+	secret := []byte(os.Getenv("REFRESH_TOKEN_SECRET"))
+	refreshToken, err := jwt.Parse(incomingRefreshToken, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return secret, nil
+	})
+	if err != nil || !refreshToken.Valid {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid refresh token plz login again")
+		return
+	}
+	claims, ok := refreshToken.Claims.(jwt.MapClaims)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid refresh token")
+		return
+	}
+	userId, ok := claims["_id"].(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid refresh token")
+		return
+	}
+	objId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid refresh token id")
+		return
+	}
+	collection := config.GetCollection("users")
+	filter := bson.M{"_id": objId}
+	project := bson.M{"_id":1}
+	opts := options.FindOne().SetProjection(project)
+	var user models.User
+	if err := collection.FindOne(r.Context(),filter,opts).Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
+			utils.RespondWithError(w,http.StatusUnauthorized,"No user found or invalid refresh token")
+		}else{
+			utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		}
+		return
+	}
+	if user.RefreshToken != incomingRefreshToken {
+		utils.RespondWithError(w,http.StatusUnauthorized,"Refersh Token dosen't match might be expierd or used , Try Login Again")
+		return
+	}
+	accessToken, err := user.GenerateAccessToken()
+	if err != nil {
+		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		return
+	}
+	newRefreshToken, err := user.GenerateRefreshToken()
+	if err != nil {
+		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		return
+	}
+	user.AccessToken = accessToken
+	user.RefreshToken = newRefreshToken
+	tokenUpdate, err := user.SaveRefreshTokenAndAccessToken(r.Context(),collection)
+	if err != nil {
+		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		return
+	}
+	fmt.Println("tokenUpdate",tokenUpdate)
+	http.SetCookie(w,&http.Cookie{
+		Name:"accessToken",
+		Value:accessToken,
+		Expires:time.Now().Add(time.Hour * 24),
+	})
+	http.SetCookie(w,&http.Cookie{
+		Name:"refreshToken",
+		Value:newRefreshToken,
+		Expires:time.Now().Add(time.Hour * 24 * 7),
+	})
+	utils.RespondWithJson(w,http.StatusOK,200,map[string]interface{}{
+		"accessToken":accessToken,
+		"refreshToken":newRefreshToken,
+	},"Token Refreshed Successfully")
+
+
+
+}
+func getRefreshTokenFromRequestBdy(r *http.Request) string {
+	cookie, err := r.Cookie("refreshToken")
+	if err == nil {
+		return cookie.Value
+	}
+	var body struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+		return body.RefreshToken
+	}
+	token := r.Header.Get("refreshToken")
+	if token != "" {
+		return token
+	}
+	return ""
 
 }
