@@ -18,7 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 func VerifyToken(next http.Handler) http.Handler {
-	fmt.Print("Verify Token")
+	// fmt.Print("Verify Token")
 	secret := []byte(os.Getenv("ACCESS_TOKEN_SECRET"))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get the token from the request
@@ -26,7 +26,7 @@ func VerifyToken(next http.Handler) http.Handler {
 		getCookie, err := r.Cookie("accessToken")
 	
 		fmt.Println("\ncheckTokenString",checkTokenString)
-		fmt.Println("getCookie",getCookie)
+		// fmt.Println("getCookie",getCookie)
 		tokenParts := strings.Split(r.Header.Get("Authorization"), " ")
 		tokenString := ""
 		if len(tokenParts) == 2 {
@@ -53,7 +53,7 @@ func VerifyToken(next http.Handler) http.Handler {
 			}
 			return secret,nil
 		})
-		fmt.Println("accessToken",accessToken.Claims)
+		// fmt.Println("accessToken",accessToken.Claims)
 		if err != nil || !accessToken.Valid {
 			utils.RespondWithError(w, http.StatusUnauthorized,"invalid token")
 			return 

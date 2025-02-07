@@ -66,8 +66,8 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	filter := bson.M{"email": email}
 	project := bson.M{"email": 1}
 	collection, err := models.GetUser(r.Context(), filter, project, &result)
-	fmt.Printf("\nexistingUser: %+v\n", collection)
-	fmt.Printf(("\n result: %+v\n"), result)
+	// fmt.Printf("\nexistingUser: %+v\n", collection)
+	// fmt.Printf(("\n result: %+v\n"), result)
 
 	if result.Email == email {
 		utils.RespondWithError(w, 400, fmt.Sprintf("User already exists with email %v", email))
@@ -165,7 +165,7 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, 400, fmt.Sprintf("user with email %v does not exist", result.Email))
 		return
 	}
-	fmt.Println("user", user)
+	// fmt.Println("user", user)
 	if err := user.IsPasswordCorrect(result.Password); err != nil {
 		utils.RespondWithError(w, 400, "password is incorrect ")
 		return
@@ -236,7 +236,11 @@ func LogOutUser(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondWithJson(w, 200, 200, nil, "User logged out successfully")
 }
-
+/**
+ * get the current user .
+ *
+ * POST /api/users/getCurrentUser
+ */
 func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// get userId from context
 	userId, ok := r.Context().Value("userId").(string)
@@ -300,7 +304,7 @@ func GetRefreshToken(w http.ResponseWriter, r *http.Request) {
 	// get refresh token from cookie
 	incomingRefreshToken := getRefreshTokenFromRequestBdy(r)
 	if incomingRefreshToken == "" {
-		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token plz login again")
 		return
 	}
 	// verify the incoming refresh token
@@ -332,7 +336,7 @@ func GetRefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 	collection := config.GetCollection("users")
 	filter := bson.M{"_id": objId}
-	project := bson.M{"_id":1}
+	project := bson.M{"_id":1,"refreshToken":1,"accessToken":1}
 	opts := options.FindOne().SetProjection(project)
 	var user models.User
 	if err := collection.FindOne(r.Context(),filter,opts).Decode(&user); err != nil {
@@ -344,6 +348,8 @@ func GetRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user.RefreshToken != incomingRefreshToken {
+		fmt.Println("user.RefreshToken",user.RefreshToken)
+		fmt.Println("incomingRefreshToken",incomingRefreshToken)
 		utils.RespondWithError(w,http.StatusUnauthorized,"Refersh Token dosen't match might be expierd or used , Try Login Again")
 		return
 	}
@@ -399,5 +405,69 @@ func getRefreshTokenFromRequestBdy(r *http.Request) string {
 		return token
 	}
 	return ""
+
+}
+/**
+ * Change the current user's password.
+ *
+ * POST /api/users/change-password
+ */
+func ChangePassword(w http.ResponseWriter,r *http.Request){
+	// Step 1: Get user id from the request as the user is authenticated
+    // Step 2: Find user from the database using the user id
+    // Step 3: Compare oldPassword with the user's current password in the database
+    // Step 4: If the user is not found, throw a 404 error
+    // Step 5: If the old password is incorrect, throw a 400 error
+    // Step 6: Set the new password for the user
+    // Step 7: Save the user with the new password (validateBeforeSave set to false to bypass validation)
+    // Step 8: Respond with a success message and the new password
+	var body struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.RespondWithError(w,http.StatusBadRequest,"invalid request")
+		return
+	}
+	userId,ok:=r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w,http.StatusUnauthorized,"invalid token")
+		return
+	}
+	objId,err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w,http.StatusUnauthorized,"invalid token")
+		return
+	}
+	// fmt.Println("objId",objId)
+	collection := config.GetCollection("users")
+	filter := bson.M{"_id":objId}
+	project := bson.M{"_id":1,"password":1}
+	opts := options.FindOne().SetProjection(project)
+	var user models.User
+	if err := collection.FindOne(r.Context(),filter,opts).Decode(&user); err !=nil {
+		if err == mongo.ErrNoDocuments {
+			utils.RespondWithError(w,http.StatusNotFound,"please login again")
+		}else{
+			utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		}
+		return
+	}
+	if err := user.IsPasswordCorrect(body.OldPassword); err != nil {
+		utils.RespondWithError(w,http.StatusBadRequest,"old password is incorrect")
+		return
+	}
+	user.Password = body.NewPassword
+	if err := user.HashPassword(); err != nil {
+		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		return
+	}
+	updateResult,err := collection.UpdateOne(r.Context(),filter,bson.M{"$set":bson.M{"password":user.Password}})
+	if err != nil {
+		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		return
+	}
+	fmt.Println("updateResult",updateResult)
+	utils.RespondWithJson(w,http.StatusOK,200,nil,"password changed successfully")
 
 }

@@ -67,6 +67,7 @@ func main() {
 		r.With(VerifyToken).Get("/getCurrentUser",handlers.GetUserHandler)
 		r.Post("/refresh-Token",handlers.GetRefreshToken)
 		r.Post("/logout",handlers.LogOutUser)
+		r.With(VerifyToken).Post("/change-Password",handlers.ChangePassword)
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)

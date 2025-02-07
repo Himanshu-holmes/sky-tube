@@ -3,7 +3,7 @@ package models
 import (
 	"context"
 	"errors"
-	"fmt"
+
 	"os"
 	"time"
 
@@ -46,7 +46,7 @@ func (u *User) HashPassword() error {
 
 // IsPasswordCorrect compares a plain text password with the hashed password.
 func (u *User) IsPasswordCorrect(password string) error {
-	fmt.Println("password",password,u.Password)
+	// fmt.Println("password",password,u.Password)
 	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
 	return err 
 }
