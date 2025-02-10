@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func UploadImage(file multipart.File, handler *multipart.FileHeader) (string, error) {
+func UploadImage(ctx context.Context,file multipart.File, handler *multipart.FileHeader) (string, error) {
 	if _, err := os.Stat("uploads"); os.IsNotExist(err) {
 		if mkDirErr := os.Mkdir("uploads", os.ModePerm); mkDirErr != nil {
 
@@ -29,7 +29,7 @@ func UploadImage(file multipart.File, handler *multipart.FileHeader) (string, er
 	if err != nil {
 		return "", err
 	}
-	var ctx = context.Background()
+
 	cld, err := config.SetupCloudinary()
 	if err != nil {
 		return "", err
@@ -42,4 +42,19 @@ func UploadImage(file multipart.File, handler *multipart.FileHeader) (string, er
 	}
 
 	return resp.SecureURL, nil
+}
+
+func DeleteCloudinaryImage( ctx context.Context, PublicID string) error {
+	cld, err := config.SetupCloudinary()
+	if err != nil {
+		return err
+	}
+	_, err = cld.Upload.Destroy(ctx,  uploader.DestroyParams{
+		PublicID: PublicID,
+		
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

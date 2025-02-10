@@ -45,7 +45,7 @@ func main() {
 		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
 		AllowedOrigins: []string{"http://localhost:5173", "https://*", "http://*"},
 		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS","PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Access-Control-Allow-Credentials"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -68,6 +68,8 @@ func main() {
 		r.Post("/refresh-Token",handlers.GetRefreshToken)
 		r.Post("/logout",handlers.LogOutUser)
 		r.With(VerifyToken).Post("/change-Password",handlers.ChangePassword)
+		r.With(VerifyToken).Patch("/update-account",handlers.UpdateAccount)
+		r.With(VerifyToken).Patch("/update-avatar",handlers.UpdateUserAvatar)
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)

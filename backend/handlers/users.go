@@ -49,13 +49,13 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	defer coverImageFile.Close()
 
 	// Upload images
-	aImgUrl, err := utils.UploadImage(avatarFile, avatarHeaders)
+	aImgUrl, err := utils.UploadImage(r.Context(), avatarFile, avatarHeaders)
 	if err != nil {
 		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading avatar image: %v", err))
 		return
 	}
 
-	cImgUrl, err := utils.UploadImage(coverImageFile, coverImageHeaders)
+	cImgUrl, err := utils.UploadImage(r.Context(), coverImageFile, coverImageHeaders)
 	if err != nil {
 		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading cover image: %v", err))
 		return
@@ -236,6 +236,7 @@ func LogOutUser(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondWithJson(w, 200, 200, nil, "User logged out successfully")
 }
+
 /**
  * get the current user .
  *
@@ -336,57 +337,55 @@ func GetRefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 	collection := config.GetCollection("users")
 	filter := bson.M{"_id": objId}
-	project := bson.M{"_id":1,"refreshToken":1,"accessToken":1}
+	project := bson.M{"_id": 1, "refreshToken": 1, "accessToken": 1}
 	opts := options.FindOne().SetProjection(project)
 	var user models.User
-	if err := collection.FindOne(r.Context(),filter,opts).Decode(&user); err != nil {
+	if err := collection.FindOne(r.Context(), filter, opts).Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
-			utils.RespondWithError(w,http.StatusUnauthorized,"No user found or invalid refresh token")
-		}else{
-			utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+			utils.RespondWithError(w, http.StatusUnauthorized, "No user found or invalid refresh token")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		}
 		return
 	}
 	if user.RefreshToken != incomingRefreshToken {
-		fmt.Println("user.RefreshToken",user.RefreshToken)
-		fmt.Println("incomingRefreshToken",incomingRefreshToken)
-		utils.RespondWithError(w,http.StatusUnauthorized,"Refersh Token dosen't match might be expierd or used , Try Login Again")
+		fmt.Println("user.RefreshToken", user.RefreshToken)
+		fmt.Println("incomingRefreshToken", incomingRefreshToken)
+		utils.RespondWithError(w, http.StatusUnauthorized, "Refersh Token dosen't match might be expierd or used , Try Login Again")
 		return
 	}
 	accessToken, err := user.GenerateAccessToken()
 	if err != nil {
-		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
 	newRefreshToken, err := user.GenerateRefreshToken()
 	if err != nil {
-		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
 	user.AccessToken = accessToken
 	user.RefreshToken = newRefreshToken
-	tokenUpdate, err := user.SaveRefreshTokenAndAccessToken(r.Context(),collection)
+	tokenUpdate, err := user.SaveRefreshTokenAndAccessToken(r.Context(), collection)
 	if err != nil {
-		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
-	fmt.Println("tokenUpdate",tokenUpdate)
-	http.SetCookie(w,&http.Cookie{
-		Name:"accessToken",
-		Value:accessToken,
-		Expires:time.Now().Add(time.Hour * 24),
+	fmt.Println("tokenUpdate", tokenUpdate)
+	http.SetCookie(w, &http.Cookie{
+		Name:    "accessToken",
+		Value:   accessToken,
+		Expires: time.Now().Add(time.Hour * 24),
 	})
-	http.SetCookie(w,&http.Cookie{
-		Name:"refreshToken",
-		Value:newRefreshToken,
-		Expires:time.Now().Add(time.Hour * 24 * 7),
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refreshToken",
+		Value:   newRefreshToken,
+		Expires: time.Now().Add(time.Hour * 24 * 7),
 	})
-	utils.RespondWithJson(w,http.StatusOK,200,map[string]interface{}{
-		"accessToken":accessToken,
-		"refreshToken":newRefreshToken,
-	},"Token Refreshed Successfully")
-
-
+	utils.RespondWithJson(w, http.StatusOK, 200, map[string]interface{}{
+		"accessToken":  accessToken,
+		"refreshToken": newRefreshToken,
+	}, "Token Refreshed Successfully")
 
 }
 func getRefreshTokenFromRequestBdy(r *http.Request) string {
@@ -407,67 +406,258 @@ func getRefreshTokenFromRequestBdy(r *http.Request) string {
 	return ""
 
 }
+
 /**
  * Change the current user's password.
  *
  * POST /api/users/change-password
  */
-func ChangePassword(w http.ResponseWriter,r *http.Request){
+func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Get user id from the request as the user is authenticated
-    // Step 2: Find user from the database using the user id
-    // Step 3: Compare oldPassword with the user's current password in the database
-    // Step 4: If the user is not found, throw a 404 error
-    // Step 5: If the old password is incorrect, throw a 400 error
-    // Step 6: Set the new password for the user
-    // Step 7: Save the user with the new password (validateBeforeSave set to false to bypass validation)
-    // Step 8: Respond with a success message and the new password
+	// Step 2: Find user from the database using the user id
+	// Step 3: Compare oldPassword with the user's current password in the database
+	// Step 4: If the user is not found, throw a 404 error
+	// Step 5: If the old password is incorrect, throw a 400 error
+	// Step 6: Set the new password for the user
+	// Step 7: Save the user with the new password (validateBeforeSave set to false to bypass validation)
+	// Step 8: Respond with a success message and the new password
 	var body struct {
 		OldPassword string `json:"oldPassword"`
 		NewPassword string `json:"newPassword"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		utils.RespondWithError(w,http.StatusBadRequest,"invalid request")
+		utils.RespondWithError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	userId,ok:=r.Context().Value("userId").(string)
+	userId, ok := r.Context().Value("userId").(string)
 	if !ok {
-		utils.RespondWithError(w,http.StatusUnauthorized,"invalid token")
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
 		return
 	}
-	objId,err := primitive.ObjectIDFromHex(userId)
+	objId, err := primitive.ObjectIDFromHex(userId)
 	if err != nil {
-		utils.RespondWithError(w,http.StatusUnauthorized,"invalid token")
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
 		return
 	}
 	// fmt.Println("objId",objId)
 	collection := config.GetCollection("users")
-	filter := bson.M{"_id":objId}
-	project := bson.M{"_id":1,"password":1}
+	filter := bson.M{"_id": objId}
+	project := bson.M{"_id": 1, "password": 1}
 	opts := options.FindOne().SetProjection(project)
 	var user models.User
-	if err := collection.FindOne(r.Context(),filter,opts).Decode(&user); err !=nil {
+	if err := collection.FindOne(r.Context(), filter, opts).Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
-			utils.RespondWithError(w,http.StatusNotFound,"please login again")
-		}else{
-			utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+			utils.RespondWithError(w, http.StatusNotFound, "please login again")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		}
 		return
 	}
 	if err := user.IsPasswordCorrect(body.OldPassword); err != nil {
-		utils.RespondWithError(w,http.StatusBadRequest,"old password is incorrect")
+		utils.RespondWithError(w, http.StatusBadRequest, "old password is incorrect")
 		return
 	}
 	user.Password = body.NewPassword
 	if err := user.HashPassword(); err != nil {
-		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
-	updateResult,err := collection.UpdateOne(r.Context(),filter,bson.M{"$set":bson.M{"password":user.Password}})
+	updateResult, err := collection.UpdateOne(r.Context(), filter, bson.M{"$set": bson.M{"password": user.Password}})
 	if err != nil {
-		utils.RespondWithError(w,http.StatusInternalServerError,"something went wrong")
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
-	fmt.Println("updateResult",updateResult)
-	utils.RespondWithJson(w,http.StatusOK,200,nil,"password changed successfully")
+	fmt.Println("updateResult", updateResult)
+	utils.RespondWithJson(w, http.StatusOK, 200, nil, "password changed successfully")
 
+}
+
+/**
+ * Update user account details.
+ *
+ * POST /api/users/update-account
+ */
+
+func UpdateAccount(w http.ResponseWriter, r *http.Request) {
+	/*
+	   Step 1: Get data from req.body and validate
+	   Step 2: Use updateUserDetailsValidation to validate the request body.
+	   Step 3: If validation fails, throw a 400 error with the validation message.
+	*/
+	var body struct {
+		FullName string `json:"fullName"`
+		Email    string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	//  check type of fullName and email
+	if body.FullName == "" || body.Email == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "please provide fullName and email")
+		return
+	}
+	userId, ok := r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	objId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	collection := config.GetCollection("users")
+	filter := bson.M{"_id": objId}
+	update := bson.M{"$set": bson.M{"fullName": body.FullName, "email": body.Email}}
+	updateResult, err := collection.UpdateOne(r.Context(), filter, update)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+	fmt.Println("updateResult", updateResult)
+	utils.RespondWithJson(w, http.StatusOK, 200, nil, "account updated successfully")
+
+}
+
+/**
+ * Update user avatar.
+ *
+ * PATCH /api/users/update-avatar
+ */
+func UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
+	/*
+	   Step 1: Get userId from the authenticated user in the request
+	   Step 2: Get avatarLocalPath from req.file, which is provided by multer middleware
+	   Step 3: Find user by userId
+	   Step 4: Get the oldAvatarUrl from the user in the database
+	   Step 5: Delete the old avatar file from Cloudinary
+	   Step 6: Upload the new avatar to Cloudinary
+	   Step 7: Update the user's avatar URL in the database
+	   Step 8: Send the response with the updated user details
+
+	*/
+	userId, ok := r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Plz login again")
+		return
+	}
+	objId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Plz login again")
+		return
+	}
+	collection := config.GetCollection("users")
+	filter := bson.M{"_id": objId}
+	project := bson.M{"_id": 1, "avatar": 1}
+	opts := options.FindOne().SetProjection(project)
+	var user models.User
+	if err := collection.FindOne(r.Context(), filter, opts).Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
+			utils.RespondWithError(w, http.StatusNotFound, "please login again")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		}
+		return
+	}
+	avatarFile, avatarHeaders, err := r.FormFile("avatar")
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading avatar image: %v", err))
+		return
+	}
+	defer avatarFile.Close()
+	// Upload images
+	avtImgUrl, err := utils.UploadImage(r.Context(), avatarFile, avatarHeaders)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading avatar image: %v", err))
+		return
+	}
+	// delete old avatar
+	if user.Avatar != "" {
+		if err := utils.DeleteCloudinaryImage(r.Context(), user.Avatar); err != nil {
+			utils.RespondWithError(w, 400, fmt.Sprintf("Error in deleting avatar image: %v", err))
+			return
+		}
+	}
+	// update new avatar
+	update := bson.M{"$set": bson.M{"avatar": avtImgUrl}}
+	updateResult, err := collection.UpdateOne(r.Context(), filter, update)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+	fmt.Println("updateResult", updateResult)
+	utils.RespondWithJson(w, http.StatusOK, 200, nil, "avatar updated successfully")
+
+}
+
+/**
+ * Update user avatar.
+ *
+ * PATCH /api/users/update-coverImage
+ */
+func UpdateUserCoverImage(w http.ResponseWriter, r *http.Request) {
+	/*
+	   Step 1: Get userId from the authenticated user in the request
+	   Step 2: Get coverImageLocalPath from req.file, which is provided by multer middleware
+	   Step 3: Find user by userId
+	   Step 4: Get the oldCoverImageUrl from the user in the database
+	   Step 5: Delete the old avatar file from Cloudinary
+	   Step 6: Upload the new avatar to Cloudinary
+	   Step 7: Update the user's avatar URL in the database
+	   Step 8: Send the response with the updated user details
+
+	*/
+	userId, ok := r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Plz login again")
+		return
+	}
+	objId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Please login again")
+		return
+	}
+	collection := config.GetCollection("users")
+	filter := bson.M{"_id": objId}
+	project := bson.M{"_id": 1, "coverImage": 1}
+	opts := options.FindOne().SetProjection(project)
+	var user models.User
+	if err := collection.FindOne(r.Context(), filter, opts).Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
+			utils.RespondWithError(w, http.StatusNotFound, "please login again")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		}
+		return
+	}
+	coverImageFile, coverImageHeaders, err := r.FormFile("coverImage")
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading cover image: %v", err))
+		return
+	}
+	defer coverImageFile.Close()
+	// Upload images
+	cvrImgUrl, err := utils.UploadImage(r.Context(), coverImageFile, coverImageHeaders)
+	if err != nil {
+		utils.RespondWithError(w, 400, fmt.Sprintf("Error in uploading cover image: %v", err))
+		return
+	}
+	// delete old coverImage
+	if user.CoverImage != "" {
+		if err := utils.DeleteCloudinaryImage(r.Context(), user.CoverImage); err != nil {
+			utils.RespondWithError(w, 400, fmt.Sprintf("Error in deleting cover image: %v", err))
+			return
+		}
+	}
+	// update new coverImage
+	update := bson.M{"$set": bson.M{"coverImage": cvrImgUrl}}
+	updateResult, err := collection.UpdateOne(r.Context(), filter, update)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+	fmt.Println("updateResult", updateResult)
+	utils.RespondWithJson(w, http.StatusOK, 200, nil, "coverImage updated successfully")
+	
 }
