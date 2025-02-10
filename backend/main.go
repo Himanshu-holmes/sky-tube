@@ -70,6 +70,7 @@ func main() {
 		r.With(VerifyToken).Post("/change-Password",handlers.ChangePassword)
 		r.With(VerifyToken).Patch("/update-account",handlers.UpdateAccount)
 		r.With(VerifyToken).Patch("/update-avatar",handlers.UpdateUserAvatar)
+		r.With(VerifyToken).Patch("/update-coverImage",handlers.UpdateUserCoverImage)
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)
