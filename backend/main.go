@@ -56,7 +56,7 @@ func main() {
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello World!"))
 	})
-
+// users route
 	r.Route("/api/v1/users", func(r chi.Router) {
 		r.Post("/register", handlers.RegisterUser)
 		r.Post("/login", handlers.LoginUser)
@@ -71,7 +71,10 @@ func main() {
 		r.With(VerifyToken).Patch("/update-account",handlers.UpdateAccount)
 		r.With(VerifyToken).Patch("/update-avatar",handlers.UpdateUserAvatar)
 		r.With(VerifyToken).Patch("/update-coverImage",handlers.UpdateUserCoverImage)
+		r.With(VerifyToken).Get("/channel/{username}",handlers.GetUserChannelProfile)
+		r.With(VerifyToken).Get("/watch-history",handlers.GetWatchHistory)
 	})
+	
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)
 		//   w.Write([]byte("route does not exist"))

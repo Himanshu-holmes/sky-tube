@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Himanshu-holmes/sky-tube/config"
 	models "github.com/Himanshu-holmes/sky-tube/model"
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -659,5 +661,160 @@ func UpdateUserCoverImage(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println("updateResult", updateResult)
 	utils.RespondWithJson(w, http.StatusOK, 200, nil, "coverImage updated successfully")
-	
+
+}
+
+func GetUserChannelProfile(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Get userId from context
+	userId, ok := r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	objId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	// Step 2: Get and validate username
+	username := chi.URLParam(r, "username")
+	if username == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "username is required")
+		return
+	}
+
+	// Step 3: MongoDB Aggregation Pipeline
+	collection := config.GetCollection("users")
+	pipeline := mongo.Pipeline{
+		bson.D{{"$match", bson.D{{"username", strings.ToLower(username)}}}},
+		bson.D{{"$lookup", bson.D{
+			{"from", "subscriptions"},
+			{"localField", "_id"},
+			{"foreignField", "channel"},
+			{"as", "subscribers"},
+		}}},
+		bson.D{{"$lookup", bson.D{
+			{"from", "subscriptions"},
+			{"localField", "_id"},
+			{"foreignField", "subscriber"},
+			{"as", "subscribedTo"},
+		}}},
+		bson.D{{"$addFields", bson.D{
+			{"subscribersCount", bson.D{{"$size", "$subscribers"}}},
+			{"channelsSubscribedToCount", bson.D{{"$size", "$subscribedTo"}}},
+			{"isSubscribed", bson.D{
+				{"$cond", bson.D{
+					{"if", bson.D{{"$in", bson.A{objId, "$subscribers.subscriber"}}}},
+					{"then", true},
+					{"else", false},
+				}},
+			}},
+		}}},
+		bson.D{{"$project", bson.D{
+			{"fullName", 1},
+			{"username", 1},
+			{"subscribersCount", 1},
+			{"channelsSubscribedToCount", 1},
+			{"isSubscribed", 1},
+			{"avatar", 1},
+			{"coverImage", 1},
+			{"email", 1},
+		}}},
+	}
+
+	// Step 4: Execute Aggregation Query
+	cursor, err := collection.Aggregate(r.Context(), pipeline)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+
+	// Step 5: Parse Cursor Results
+	var users []models.User
+	if err := cursor.All(r.Context(), &users); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+
+	// Step 6: Validate if channel exists
+	if len(users) == 0 {
+		utils.RespondWithError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+
+	// Step 7: Send Response
+	utils.RespondWithJson(w, http.StatusOK, 200, users[0], "channel profile fetched successfully")
+}
+
+func GetWatchHistory(w http.ResponseWriter, r *http.Request) {
+	/*
+	  Step 1: Get user ID from the authenticated user in the request
+	  Step 2: Check if the user ID is available
+	  Step 3: Use MongoDB aggregation to fetch user and their watch history
+	  Step 4: Match user based on user ID
+	  Step 5: Match user based on user ID
+	  Step 6: Sub-pipeline for additional lookup operations on the "video" collection
+	  Step 7: Lookup owner details from the "user" collection
+	  Step 8: Project specific fields from the "user" collection
+	  Step 9: Add a field "owner" containing the first result from the owner lookup
+	  Step 10: Check if a user with watch history is found
+	  Step 11: Send the response with the watch history
+
+	*/
+	userId, ok := r.Context().Value("userId").(string)
+	if !ok {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	objId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	collection := config.GetCollection("users")
+		// Define the aggregation pipeline
+	pipeline := mongo.Pipeline{
+		{{"$match", bson.D{{"_id", objId}}}},
+		{{"$lookup", bson.D{
+			{"from", "videos"},
+			{"localField", "watchHistory"},
+			{"foreignField", "_id"},
+			{"as", "watchHistory"},
+			{"pipeline", bson.A{
+				bson.D{{"$lookup", bson.D{
+					{"from", "users"},
+					{"localField", "owner"},
+					{"foreignField", "_id"},
+					{"as", "owner"},
+					{"pipeline", bson.A{
+						bson.D{{"$project", bson.D{
+							{"fullName", 1},
+							{"username", 1},
+							{"avatar", 1},
+						}}},
+					}},
+				}}},
+				bson.D{{"$addFields", bson.D{
+					{"owner", bson.D{{"$first", "$owner"}}},
+				}}},
+			}},
+		}}},
+	}
+	cursor, err := collection.Aggregate(r.Context(), pipeline)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+	var users []models.User
+	if err := cursor.All(r.Context(), &users); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
+	}
+	if len(users) == 0 {
+		utils.RespondWithError(w,400, "user not found")
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, 200, users[0].WatchHistory, "watch history fetched successfully")
+
 }
