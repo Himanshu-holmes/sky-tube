@@ -25,7 +25,7 @@ type User struct {
 	CoverImage   string               `bson:"coverImage"`
 	WatchHistory []primitive.ObjectID `bson:"watchHistory"`
 	Password     string               `bson:"password" validate:"required"`
-	AccessToken  string   			`bson:"accessToken"`
+	AccessToken  string   			   `bson:"accessToken"`
 	RefreshToken string               `bson:"refreshToken"`
 	CreatedAt    time.Time            `bson:"createdAt"`
 	UpdatedAt    time.Time            `bson:"updatedAt"`

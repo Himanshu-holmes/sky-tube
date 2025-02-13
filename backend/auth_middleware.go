@@ -24,7 +24,10 @@ func VerifyToken(next http.Handler) http.Handler {
 		// Get the token from the request
 		checkTokenString := r.Header.Get("Authorization") 
 		getCookie, err := r.Cookie("accessToken")
-	
+		if err != nil {
+		   utils.RespondWithError(w,http.StatusUnauthorized,"Please login again")
+		   return
+		}
 		fmt.Println("\ncheckTokenString",checkTokenString)
 		// fmt.Println("getCookie",getCookie)
 		tokenParts := strings.Split(r.Header.Get("Authorization"), " ")

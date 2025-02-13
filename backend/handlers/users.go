@@ -131,7 +131,7 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	type UserResponse struct {
-		ID           primitive.ObjectID   `json:"id"`
+		ID           primitive.ObjectID   `json:"_id"`
 		Username     string               `json:"username"`
 		Email        string               `json:"email"`
 		FullName     string               `json:"fullName"`
@@ -214,11 +214,13 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		Name:    "accessToken",
 		Value:   accessToken,
 		Expires: time.Now().Add(time.Hour * 24),
+		Path: "/",
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:    "refreshToken",
 		Value:   refreshToken,
 		Expires: time.Now().Add(time.Hour * 24 * 7),
+		Path: "/",
 	})
 
 	utils.RespondWithJson(w, 200, 200, loginResponse, "User logged in successfully")
@@ -269,7 +271,7 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// json structure of user
 	type userResponse struct {
-		ID           primitive.ObjectID   `json:"id"`
+		ID           primitive.ObjectID   `json:"_id"`
 		Username     string               `json:"username"`
 		Email        string               `json:"email"`
 		FullName     string               `json:"fullName"`
@@ -729,13 +731,24 @@ func GetUserChannelProfile(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
-
+type UserChannelProfile struct {
+				
+	FullName                    string `json:"fullName"`
+	Username                    string `json:"username"`
+	Avatar                      string `json:"avatar"`
+	CoverImage                  string `json:"coverImage"`
+	WatchHistory				string `json:"watchHistory"`
+}
 	// Step 5: Parse Cursor Results
-	var users []models.User
+	var users []struct {
+		ID primitive.ObjectID `bson:"_id"`
+		UserChannelProfile
+	}
 	if err := cursor.All(r.Context(), &users); err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
 		return
 	}
+
 
 	// Step 6: Validate if channel exists
 	if len(users) == 0 {

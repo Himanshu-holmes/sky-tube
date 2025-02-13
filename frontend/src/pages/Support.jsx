@@ -139,7 +139,7 @@ const Support = () => {
               <span>
                 •
                 <a
-                  href="https://www.linkedin.com/in/satendra-singh1325/"
+                  href="https://www.linkedin.com/in/himanshu-kumar-00538821b/"
                   className="underline text-[#ae7aff] ml-2"
                   target="_blank"
                 >
@@ -149,7 +149,7 @@ const Support = () => {
               <span>
                 •
                 <a
-                  href="https://github.com/Satendra-singh-oos"
+                  href="https://github.com/Himanshu-holmes"
                   className="underline text-[#ae7aff] ml-2"
                   target="_blank"
                 >

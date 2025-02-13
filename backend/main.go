@@ -45,7 +45,7 @@ func main() {
 		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
 		AllowedOrigins: []string{"http://localhost:5173", "https://*", "http://*"},
 		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS","PATCH"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Access-Control-Allow-Credentials"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -56,25 +56,51 @@ func main() {
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello World!"))
 	})
-// users route
+	// healthcheck route
+	r.Route("/api/v1/healthcheck", func(r chi.Router) {
+		r.Get("/", handlers.HealthCheck)
+	})
+	// users route
 	r.Route("/api/v1/users", func(r chi.Router) {
 		r.Post("/register", handlers.RegisterUser)
 		r.Post("/login", handlers.LoginUser)
-		r.Get("/getCurrentUser",VerifyToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			utils.RespondWithJson(w, http.StatusOK, 200, nil, "Token verified successfully")
-		})).(http.HandlerFunc))
+		r.Post("/logout", handlers.LogOutUser)
+		r.Post("/refresh-Token", handlers.GetRefreshToken)
 
-		r.With(VerifyToken).Get("/getCurrentUser",handlers.GetUserHandler)
-		r.Post("/refresh-Token",handlers.GetRefreshToken)
-		r.Post("/logout",handlers.LogOutUser)
-		r.With(VerifyToken).Post("/change-Password",handlers.ChangePassword)
-		r.With(VerifyToken).Patch("/update-account",handlers.UpdateAccount)
-		r.With(VerifyToken).Patch("/update-avatar",handlers.UpdateUserAvatar)
-		r.With(VerifyToken).Patch("/update-coverImage",handlers.UpdateUserCoverImage)
-		r.With(VerifyToken).Get("/channel/{username}",handlers.GetUserChannelProfile)
-		r.With(VerifyToken).Get("/watch-history",handlers.GetWatchHistory)
+		// r.With(VerifyToken).Get("/getCurrentUser",handlers.GetUserHandler)
+		// r.With(VerifyToken).Post("/change-Password",handlers.ChangePassword)
+		// r.With(VerifyToken).Patch("/update-account",handlers.UpdateAccount)
+		// r.With(VerifyToken).Patch("/update-avatar",handlers.UpdateUserAvatar)
+		// r.With(VerifyToken).Patch("/update-coverImage",handlers.UpdateUserCoverImage)
+		// r.With(VerifyToken).Get("/channel/{username}",handlers.GetUserChannelProfile)
+		// r.With(VerifyToken).Get("/watch-history",handlers.GetWatchHistory)
+
+		r.With(VerifyToken).Group(func(r chi.Router) {
+			r.Get("/getCurrentUser", handlers.GetUserHandler)
+			r.Post("/change-Password", handlers.ChangePassword)
+			r.Patch("/update-account", handlers.UpdateAccount)
+			r.Patch("/update-avatar", handlers.UpdateUserAvatar)
+			r.Patch("/update-coverImage", handlers.UpdateUserCoverImage)
+			r.Get("/channel/{username}", handlers.GetUserChannelProfile)
+			r.Get("/watch-history", handlers.GetWatchHistory)
+		})
 	})
-	
+
+	// tweets route
+	r.Route("/api/v1/tweets", func(r chi.Router) {
+		// r.With(VerifyToken).Post("/", handlers.CreateTweetHandler)
+		
+			r.With(VerifyToken).Group(func(r chi.Router) {
+				r.Post("/", handlers.CreateTweetHandler)
+				r.Get("/user/{userId}",handlers.GetUserTweetHandler)
+			})
+	})
+	r.Route("/api/v1/subscriptions",func(r chi.Router) {
+		r.With(VerifyToken).Group(func(r chi.Router) {
+			r.Post("/channel/{channelId}",handlers)
+		})
+	})
+
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)
 		//   w.Write([]byte("route does not exist"))
