@@ -97,7 +97,10 @@ func main() {
 	})
 	r.Route("/api/v1/subscriptions",func(r chi.Router) {
 		r.With(VerifyToken).Group(func(r chi.Router) {
-			r.Post("/channel/{channelId}",handlers)
+			r.Get("/channel/{channelId}",handlers.GetUserChannelSubscribers)
+			r.Post("/channel/{channelId}",handlers.ToggleSubscription)
+
+			r.Get("/user/{subscriberId}",handlers.GetSubscribedChannels)
 		})
 	})
 

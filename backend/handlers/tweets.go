@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -156,7 +155,8 @@ func GetUserTweetHandler(w http.ResponseWriter, r *http.Request) {
 	// Iterate over the results
 	var results []bson.M
 	if err = cursor.All(ctx, &results); err != nil {
-		log.Fatal(err)
+		utils.RespondWithError(w, http.StatusInternalServerError, "something went wrong")
+		return
 	}
 
 	// Print the results
