@@ -51,12 +51,12 @@ const MyContent = () => {
       .catch((err) => console.log(err));
   }, [dispatch, publishToggled, uploaded, deleteVideo]);
 
-  const channelStats = useSelector((state) => state.dashboard?.channelStats);
-  const channelVideos = useSelector((state) => state.dashboard?.channelVideos);
+  const channelStats = useSelector((state) => state.dashboard?.channelStats) || null;
+  const channelVideos = useSelector((state) => state.dashboard?.channelVideos) || null;
 
-  if (!channelStats || !channelVideos) {
-    return <NoVideoFound />;
-  }
+  // if (!channelStats || !channelVideos) {
+  //   return <NoVideoFound />;
+  // }
 
   const handleDeleteVideo = async () => {
     const videoId = videoDetails?._id;
@@ -77,6 +77,7 @@ const MyContent = () => {
               <div class="h-screen overflow-y-auto bg-[#121212] text-white">
                 <div class="flex min-h-[calc(100vh-66px)] sm:min-h-[calc(100vh-82px)]">
                   {" "}
+
                   <UploadVideoPopup setUploadVideoPopup={setPopUp} />
                 </div>
               </div>
@@ -109,13 +110,18 @@ const MyContent = () => {
 
             <DashboardHeader username={username} setPopUp={setPopUp} />
 
-            <DashboardStats channelStats={channelStats[0]} />
-
-            <VideoTable
-              channelVideos={channelVideos}
-              setPopUp={setPopUp}
-              setVideoDetails={setVideDetails}
-            />
+            {
+              channelStats &&
+              <DashboardStats channelStats={channelStats[0]} />
+            }
+            {
+              channelVideos &&
+              <VideoTable
+                channelVideos={channelVideos}
+                setPopUp={setPopUp}
+                setVideoDetails={setVideDetails}
+              />
+            }
           </div>
         </div>
       </div>

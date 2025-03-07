@@ -104,6 +104,12 @@ func main() {
 		})
 	})
 
+	r.Route("/api/v1/videos",func(r chi.Router) {
+		r.With(VerifyToken).Group(func(r chi.Router) {
+			r.Post("/publish-video",handlers.PublishAVideos)
+		})
+	})
+
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		//   w.WriteHeader(404)
 		//   w.Write([]byte("route does not exist"))
